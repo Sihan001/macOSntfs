@@ -1,6 +1,5 @@
 #!/bin/bash
-
-getNtfsVolName ()
+getntfsVol ()
 {
 	diskinfo="$(diskutil info "$1")"
 	ntfs="$(echo ${diskinfo} | grep NTFS)"
@@ -16,40 +15,38 @@ DEVCOUNT=0
 NTFSCOUNT=0
 MOUNTCOUNT=0
 
-sudo echo "检测ntfs分区..."
+sudo echo "checking the ntfs partition..."
 devs=`df | grep /Volumes/ | awk '{print $1}'`
 while read dev
 do
 	DEVCOUNT=$(($DEVCOUNT + 1))
-	
-	VolName="$(getNtfsVolName "$dev")"
+	VolName="$(getntfsVol "$dev")"
 	if [[ -z "$VolName" ]]; then
 		continue	
 	fi
-	echo "发现NTFS分区: ${dev}, 挂载点:${VolName}."
+	echo "found ntfs partition: ${VolName} on ${dev}."
 	NTFSCOUNT=$(($NTFSCOUNT + 1))
-	diskutil umount ${dev}
+	diskutil umount ${dev} > /dev/null 2>&1
 	if [[ $? -ne 0 ]] ; then
-		echo "弹出失败,请确定分区没有操作."
+		echo "unmount failed for ${dev}, stopped verifying"
 		continue
 	fi
-	
 	sudo mkdir "${VolName}"
-	sudo mount -t ntfs -o rw,auto,nobrowse ${dev} "${VolName}"
+	sudo mount -t ntfs -o rw,auto,nobrowse ${dev} "${VolName}" > /dev/null 2>&1
 	if [[ $? -ne 0 ]] ; then
 		sudo umount ${dev} > /dev/null 2>&1
 		sudo rm -fr "${VolName}" > /dev/null 2>&1
-		echo "分区:${dev}挂载写权限失败, 需要在windows修复."
-		echo "只读挂载分区:${dev}, 挂载点:${VolName}."
+		echo "mount failed for ${dev}, need to repair in windows PC."
+		echo "mount Read-only file system for ${dev}, mount on ${VolName}."
 		diskutil mount ${dev} 
 	else
 		MOUNTCOUNT=$(($MOUNTCOUNT + 1))
 		ln -s -f "${VolName}" ~/Desktop > /dev/null 2>&1
-		echo "成功挂载写权限分区:${dev}, 挂载点:${VolName}."
+		echo "mount succeed for ${dev}, mount on ${VolName}."
+		open ${VolName}
 	fi
-	
 done <<< "$devs"
 if [[ $MOUNTCOUNT -gt 0 ]]; then
 	open /Volumes
 fi
-echo "扩展分区:${DEVCOUNT}个, NTFS分区:${NTFSCOUNT}个, 成功挂载:${MOUNTCOUNT}."
+echo "Ext:${DEVCOUNT}, Ntfs:${NTFSCOUNT}, Succeed:${MOUNTCOUNT}."
